@@ -1,0 +1,30 @@
+# Binding health checks to an internal port
+management.port: 8081
+server.uin: T101
+
+# disable all management enpoints except health
+endpoints:
+  enabled: false
+  health.enabled: true
+
+logging.config:
+  classpath: logback.xml
+
+# The name of the Camel app
+camel.springboot:
+  name: CamelAMQP
+  main-run-controller: true
+
+
+#jms:
+#  url: "tcp://localhost:61616"
+#  username: "theuser"
+#  password: "Thepassword1!"
+#
+#
+amqp:
+  url: amqp://localhost:5672
+  username: theuser
+  password: Thepassword1!
+
+
