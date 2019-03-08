@@ -127,3 +127,54 @@ pom.xml
 ```
 
 The application.properties were swapped out for the application.yml, and an AMQPConfiguration helper class was added.
+
+## Configuring SSL on AMQ7
+
+### Generating keystores and truststores with OpenSSL and keytool
+
+```text
+# Create a broker key and cert - import the keypair and cert into the broker keystore
+openssl req -newkey rsa:2048 -nodes -keyout broker_keypair.pem -x509 -days 65000 -out broker_cert.pem
+openssl pkcs12 -inkey broker_keypair.pem -in broker_cert.pem -export -out broker_ks.p12
+
+# Create a client key and cert - import the keypair and cert into the client keystore
+openssl req -newkey rsa:2048 -nodes -keyout client_keypair.pem -x509 -days 65000 -out client_cert.pem
+openssl pkcs12 -inkey client_keypair.pem -in client_cert.pem -export -out client_ks.p12
+
+# Create a truststore for the broker, and import the client's certificate. This establishes that the broker "trusts" the client:
+keytool -import -alias client -keystore broker_ts.p12 -file client_cert.pem -deststoretype pkcs12
+
+# Create a truststore for the client, and import the broker's certificate. This establishes that the client "trusts" the broker:
+keytool -import -alias broker -keystore client_ts.p12 -file broker_cert.pem -deststoretype pkcs12
+```
+
+I generated these keystores/truststore with a password of `password` in the `$BROKER_HOME/etc` directory.  All can be
+found in this project in the `${PROJECT_HOME}/examplebroker/etc/` folder
+
+### Create the AMQ7 acceptor
+
+In the `$BROKER_HOME/etc` directory we modify `broker.xml` to have a new ssl acceptor:
+
+```xml
+<acceptor name="amqp-ssl">tcp://0.0.0.0:5671?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=AMQP;useEpoll=true;amqpCredits=1000;amqpMinCredits=300;connectionsAllowed=1000;sslEnabled=true;keyStorePath=broker_ks.p12;keyStorePassword=password;trustStorePath=broker_ts.p12;trustStorePassword=password</acceptor>
+```
+The full `broker.xml` file can be found in this project in `${PROJECT_HOME}/examplebroker/etc/`
+
+### Change the Client Application config
+
+`src/main/resources/application.yml` change the amqp url:
+
+```text
+  url: amqps://localhost:5671?transport.trustStoreLocation=/home/user/AppServers/examplebroker/etc/client_ts.p12&transport.trustStorePassword=password&transport.verifyHost=false&jms.sendTimeout=5000
+```
+
+I've pointed the `transport.trustStoreLocation` to where the trustores were generated (in the `$BROKER_HOME/etc` directory)
+
+### Run the client with ssl configured.
+
+
+## References
+
+- [https://developers.redhat.com/blog/2017/11/30/securing-amq7-routers-ssl/](https://developers.redhat.com/blog/2017/11/30/securing-amq7-routers-ssl/)
+- [https://developers.redhat.com/blog/2017/12/28/securing-amq7-brokers-ssl/](https://developers.redhat.com/blog/2017/12/28/securing-amq7-brokers-ssl/)
+- [http://activemq.apache.org/how-do-i-use-ssl.html](http://activemq.apache.org/how-do-i-use-ssl.html)
